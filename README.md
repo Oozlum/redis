@@ -1,3 +1,17 @@
+What is this fork?
+--------------
+
+This is a fork of Redis at version 5.0.14, which is the last version compilable with an old toolchain on armv5tejl.
+
+This fork is intended to be used on an embedded system to serve mainly as an IPC and shared memory system.  Intended changes:
+
+* Removal of unnecessary code: replication, sharding, etc.
+* Implementation of basic ACL.
+* Client disconnection and 'last will' functionality.
+
+Original README.md
+------------------
+
 This README is just a fast *quick start* document. You can find more detailed documentation at [redis.io](https://redis.io).
 
 What is Redis?

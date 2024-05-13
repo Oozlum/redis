@@ -35,10 +35,12 @@ INSTALL=install
 
 # Default allocator defaults to Jemalloc if it's not an ARM
 MALLOC=libc
+ifneq ($(uname_M),armv5tejl)
 ifneq ($(uname_M),armv6l)
 ifneq ($(uname_M),armv7l)
 ifeq ($(uname_S),Linux)
 	MALLOC=jemalloc
+endif
 endif
 endif
 endif
@@ -78,11 +80,13 @@ FINAL_LIBS=-lm
 DEBUG=-g -ggdb
 
 # Linux ARM needs -latomic at linking time
+ifneq ($(uname_M),armv5tejl)
 ifneq (,$(filter aarch64 armv,$(uname_M)))
         FINAL_LIBS+=-latomic
 else
 ifneq (,$(findstring armv,$(uname_M)))
         FINAL_LIBS+=-latomic
+endif
 endif
 endif
 
