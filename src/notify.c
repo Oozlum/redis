@@ -145,4 +145,5 @@ void notifyClientDisconnect(robj *name) {
     chanobj = createStringObject(CLIENT_DISCONNECTED_CHANNEL, strlen(CLIENT_DISCONNECTED_CHANNEL));
     pubsubPublishMessage(chanobj, name);
     decrRefCount(chanobj);
+    dictDelete(server.client_names, name->ptr);
 }

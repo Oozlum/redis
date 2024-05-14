@@ -240,7 +240,7 @@ struct redisCommand redisCommandTable[] = {
     {"keys",keysCommand,2,"rS",0,NULL,0,0,0,0,0},
     {"scan",scanCommand,-2,"rR",0,NULL,0,0,0,0,0},
     {"dbsize",dbsizeCommand,1,"rF",0,NULL,0,0,0,0,0},
-    {"auth",authCommand,2,"sltMF",0,NULL,0,0,0,0,0},
+    {"auth",authCommand,3,"sltMF",0,NULL,0,0,0,0,0},
     {"ping",pingCommand,-1,"tF",0,NULL,0,0,0,0,0},
     {"echo",echoCommand,2,"F",0,NULL,0,0,0,0,0},
     {"save",saveCommand,1,"as",0,NULL,0,0,0,0,0},
@@ -2049,6 +2049,7 @@ void initServer(void) {
     server.pid = getpid();
     server.current_client = NULL;
     server.fixed_time_expire = 0;
+    server.client_names = dictCreate(&commandTableDictType,NULL); /* this dict type does what we need. */
     server.clients = listCreate();
     server.clients_index = raxNew();
     server.clients_to_close = listCreate();
@@ -2944,15 +2945,36 @@ int time_independent_strcmp(char *a, char *b) {
     return diff; /* If zero strings are the same. */
 }
 
+static void deAuthClient(client *c) {
+    if (c->name) {
+        notifyClientDisconnect(c->name);
+        decrRefCount(c->name);
+        c->name = 0;
+    }
+    c->authenticated = 0;
+}
+
 void authCommand(client *c) {
     if (!server.requirepass) {
         addReplyError(c,"Client sent AUTH, but no password is set");
-    } else if (!time_independent_strcmp(c->argv[1]->ptr, server.requirepass)) {
-      c->authenticated = 1;
-      addReply(c,shared.ok);
+    } else if (sdslen(c->argv[1]->ptr) == 0) {
+        deAuthClient(c);
+        addReplyError(c,"invalid name");
+    } else if (time_independent_strcmp(c->argv[2]->ptr, server.requirepass)) {
+        deAuthClient(c);
+        addReplyError(c,"invalid password");
+    } else if (c->name && !time_independent_strcmp(c->argv[1]->ptr, c->name->ptr)) {
+        addReply(c,shared.ok);
     } else {
-      c->authenticated = 0;
-      addReplyError(c,"invalid password");
+        deAuthClient(c);
+        if (dictFind(server.client_names, c->argv[1]->ptr)) {
+            addReplyErrorFormat(c,"Client '%s' already connected", (sds)c->argv[1]->ptr);
+        } else {
+            dictAdd(server.client_names, sdsdup(c->argv[1]->ptr), NULL);
+            c->name = createObject(OBJ_STRING, sdsdup(c->argv[1]->ptr));
+            c->authenticated = 1;
+            addReply(c,shared.ok);
+        }
     }
 }
 
