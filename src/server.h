@@ -1825,6 +1825,9 @@ void notifyKeyspaceEvent(int type, char *event, robj *key, int dbid);
 int keyspaceEventsStringToFlags(char *classes);
 sds keyspaceEventsFlagsToString(int flags);
 
+/* Client disconnection notification */
+void notifyClientDisconnect(robj *name);
+
 /* Configuration */
 void loadServerConfig(char *filename, char *options);
 void appendServerSaveParams(time_t seconds, int changes);

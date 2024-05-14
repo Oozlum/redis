@@ -136,3 +136,13 @@ void notifyKeyspaceEvent(int type, char *event, robj *key, int dbid) {
     }
     decrRefCount(eventobj);
 }
+
+#define CLIENT_DISCONNECTED_CHANNEL "__client:disconnected"
+
+void notifyClientDisconnect(robj *name) {
+    robj *chanobj;
+
+    chanobj = createStringObject(CLIENT_DISCONNECTED_CHANNEL, strlen(CLIENT_DISCONNECTED_CHANNEL));
+    pubsubPublishMessage(chanobj, name);
+    decrRefCount(chanobj);
+}
