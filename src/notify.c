@@ -119,7 +119,7 @@ void notifyKeyspaceEvent(int type, char *event, robj *key, int dbid) {
         chan = sdscatlen(chan, "__:", 3);
         chan = sdscatsds(chan, key->ptr);
         chanobj = createObject(OBJ_STRING, chan);
-        pubsubPublishMessage(chanobj, eventobj);
+        pubsubPublishMessage(chanobj, eventobj, NULL);
         decrRefCount(chanobj);
     }
 
@@ -131,7 +131,7 @@ void notifyKeyspaceEvent(int type, char *event, robj *key, int dbid) {
         chan = sdscatlen(chan, "__:", 3);
         chan = sdscatsds(chan, eventobj->ptr);
         chanobj = createObject(OBJ_STRING, chan);
-        pubsubPublishMessage(chanobj, key);
+        pubsubPublishMessage(chanobj, key, NULL);
         decrRefCount(chanobj);
     }
     decrRefCount(eventobj);
@@ -143,7 +143,7 @@ void notifyClientDisconnect(robj *name) {
     robj *chanobj;
 
     chanobj = createStringObject(CLIENT_DISCONNECTED_CHANNEL, strlen(CLIENT_DISCONNECTED_CHANNEL));
-    pubsubPublishMessage(chanobj, name);
+    pubsubPublishMessage(chanobj, name, NULL);
     decrRefCount(chanobj);
     dictDelete(server.client_names, name->ptr);
 }

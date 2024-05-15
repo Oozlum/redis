@@ -222,7 +222,7 @@ int pubsubUnsubscribeAllPatterns(client *c, int notify) {
 }
 
 /* Publish a message */
-int pubsubPublishMessage(robj *channel, robj *message) {
+int pubsubPublishMessage(robj *channel, robj *message, robj *sender_name) {
     int receivers = 0;
     dictEntry *de;
     listNode *ln;
@@ -239,10 +239,21 @@ int pubsubPublishMessage(robj *channel, robj *message) {
         while ((ln = listNext(&li)) != NULL) {
             client *c = ln->value;
 
-            addReply(c,shared.mbulkhdr[3]);
+            if (c->flags & CLIENT_SUBSCRIBE_WITH_SRC) {
+                addReply(c,shared.mbulkhdr[4]);
+            } else {
+                addReply(c,shared.mbulkhdr[3]);
+            }
             addReply(c,shared.messagebulk);
             addReplyBulk(c,channel);
             addReplyBulk(c,message);
+            if (c->flags & CLIENT_SUBSCRIBE_WITH_SRC) {
+                if (!sender_name) {
+                    addReply(c,shared.nullbulk);
+                } else {
+                    addReplyBulk(c,sender_name);
+                }
+            }
             receivers++;
         }
     }
@@ -257,11 +268,22 @@ int pubsubPublishMessage(robj *channel, robj *message) {
                                 sdslen(pat->pattern->ptr),
                                 (char*)channel->ptr,
                                 sdslen(channel->ptr),0)) {
-                addReply(pat->client,shared.mbulkhdr[4]);
+                if (pat->client->flags & CLIENT_SUBSCRIBE_WITH_SRC) {
+                    addReply(pat->client,shared.mbulkhdr[5]);
+                } else {
+                    addReply(pat->client,shared.mbulkhdr[4]);
+                }
                 addReply(pat->client,shared.pmessagebulk);
                 addReplyBulk(pat->client,pat->pattern);
                 addReplyBulk(pat->client,channel);
                 addReplyBulk(pat->client,message);
+                if (pat->client->flags & CLIENT_SUBSCRIBE_WITH_SRC) {
+                    if (!sender_name) {
+                        addReply(pat->client,shared.nullbulk);
+                    } else {
+                        addReplyBulk(pat->client,sender_name);
+                    }
+                }
                 receivers++;
             }
         }
@@ -274,10 +296,30 @@ int pubsubPublishMessage(robj *channel, robj *message) {
  * Pubsub commands implementation
  *----------------------------------------------------------------------------*/
 
-void subscribeCommand(client *c) {
-    int j;
+/* check for the keyword SRC as the last argument, which instructs the server to
+ * add the publisher's client name to the subscription replies.  Return the
+ * adjusted argument count.
+ */
+static int checkForExtendedSubscribe(client *c) {
+    int argc;
+    robj *SRC;
 
-    for (j = 1; j < c->argc; j++)
+    argc = c->argc;
+    SRC = createStringObject("SRC", 3);
+    if (equalStringObjects(SRC, c->argv[argc - 1])) {
+        --argc;
+        c->flags |= CLIENT_SUBSCRIBE_WITH_SRC;
+    }
+
+    decrRefCount(SRC);
+    return argc;
+}
+
+void subscribeCommand(client *c) {
+    int j, argc;
+
+    argc = checkForExtendedSubscribe(c);
+    for (j = 1; j < argc; j++)
         pubsubSubscribeChannel(c,c->argv[j]);
     c->flags |= CLIENT_PUBSUB;
 }
@@ -295,9 +337,10 @@ void unsubscribeCommand(client *c) {
 }
 
 void psubscribeCommand(client *c) {
-    int j;
+    int j, argc;
 
-    for (j = 1; j < c->argc; j++)
+    argc = checkForExtendedSubscribe(c);
+    for (j = 1; j < argc; j++)
         pubsubSubscribePattern(c,c->argv[j]);
     c->flags |= CLIENT_PUBSUB;
 }
@@ -315,7 +358,7 @@ void punsubscribeCommand(client *c) {
 }
 
 void publishCommand(client *c) {
-    int receivers = pubsubPublishMessage(c->argv[1],c->argv[2]);
+    int receivers = pubsubPublishMessage(c->argv[1],c->argv[2],c->name);
     if (server.cluster_enabled)
         clusterPropagatePublish(c->argv[1],c->argv[2]);
     else
